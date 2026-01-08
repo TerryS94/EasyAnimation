@@ -50,6 +50,7 @@ private:
 	EAnimState animState = EAnimState::STOPPED;
 	int iterations;//-1 for inf iterations
 	EAnimDirection direction;
+	EAnimDirection initialDirection;
 	bool movingForward;//internal for PingPong mode
 	std::function<float(float progress)> easeFunc {};
 	float* optionalTargetValue = nullptr;
@@ -57,7 +58,7 @@ public:
 
 public:
 	inline Animation(float* optionalTargetValue, float minValue, float maxValue, float duration, float delay, int iterations, EAnimDirection direction, std::function<float(float)> easeFunc)
-		: optionalTargetValue(optionalTargetValue), minValue(minValue), maxValue(maxValue), duration(duration), delayLeft(delay), initialDelay(delay), iterations(iterations), direction(direction), easeFunc(std::move(easeFunc)), movingForward(true)
+		: initialDirection(direction), optionalTargetValue(optionalTargetValue), minValue(minValue), maxValue(maxValue), duration(duration), delayLeft(delay), initialDelay(delay), iterations(iterations), direction(direction), easeFunc(std::move(easeFunc)), movingForward(true)
 	{
 		progressValue = (direction == EAnimDirection::Backward) ? maxValue : minValue;
 	};
@@ -146,12 +147,46 @@ public:
 		if (optionalTargetValue) *optionalTargetValue = progressValue;
     }
 	inline float GetValue() const { return progressValue; }
+	//start/restart the animation in the desired direction that was passed in
 	inline void Restart()
-	{ 
-		movingForward = true;
+	{
+		direction = initialDirection;
+		delayLeft = initialDelay;
 		t = 0.0f;
+		movingForward = true;
 		progressValue = (direction == EAnimDirection::Backward) ? maxValue : minValue;
-		if (direction == EAnimDirection::Backward) movingForward = false;
+		if (direction == EAnimDirection::PingPong)
+		{
+			movingForward = true;
+			progressValue = minValue;
+		}
+		if (optionalTargetValue) *optionalTargetValue = progressValue;
+		animState = EAnimState::RUNNING;
+	}
+	//RestartReverse() does NOT permanently change the configured direction.
+    //it computes a temporary "start reversed" state using initialDirection.
+	inline void RestartReverse()
+	{
+		direction = initialDirection;
+		delayLeft = initialDelay;
+		t = 0.0f;
+		if (direction == EAnimDirection::Forward)
+		{
+			direction = EAnimDirection::Backward;
+			progressValue = maxValue;
+		}
+		else if (direction == EAnimDirection::Backward)
+		{
+			direction = EAnimDirection::Forward;
+			progressValue = minValue;
+		}
+		else//PingPong
+		{
+			movingForward = false;
+			progressValue = maxValue;
+		}
+
+		if (optionalTargetValue) *optionalTargetValue = progressValue;
 		animState = EAnimState::RUNNING;
 	}
 	inline void Stop()
@@ -162,10 +197,11 @@ public:
 			case EAnimDirection::Backward: progressValue = minValue; break;
 			case EAnimDirection::PingPong: progressValue = minValue; movingForward = true; break;
 		}
+		if (optionalTargetValue) *optionalTargetValue = progressValue;
 		animState = EAnimState::STOPPED;
 	}
 	inline EAnimState GetState() const { return animState; }
-	inline bool IsAnimationInfinite() const { return iterations < 1; }
+	inline bool IsAnimationInfinite() const { return iterations == -1; }
 	inline bool IsRunning() const { return animState == EAnimState::RUNNING; }
 };
 class EasyAnimation
