@@ -210,7 +210,7 @@ public:
 		for (const auto& [_, anim] : animations) anim.get()->Stop();
 		animations.clear();
 	}
-	//if the animation iterations is not inf and the current thread id is different than the thread id that this anim was created on, then sleep until the animation is over.
+	//if the animation iterations is not inf and the current thread id is different than the thread id that UpdateAll is called on, then sleep until the animation is over.
 	//A scenario this would be useful for is if you unloaded a dll but wanted to wait for an anim to finish on the render thread before your ejection code runs in your main thread.
 	inline void WaitForAnimationFinish(const std::string& animName)
 	{
