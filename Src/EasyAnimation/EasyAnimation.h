@@ -9,6 +9,8 @@
 #include <memory>
 #include <thread>
 #include <chrono>
+#include <algorithm>
+#include <cmath>
 
 //https://easings.net/
 namespace EaseFuncs
@@ -58,7 +60,15 @@ public:
 
 public:
 	inline Animation(float* optionalTargetValue, float minValue, float maxValue, float duration, float delay, int iterations, EAnimDirection direction, std::function<float(float)> easeFunc)
-		: initialDirection(direction), optionalTargetValue(optionalTargetValue), minValue(minValue), maxValue(maxValue), duration(duration), delayLeft(delay), initialDelay(delay), iterations(iterations), direction(direction), easeFunc(std::move(easeFunc)), movingForward(true)
+		: initialDirection(direction),
+		  optionalTargetValue(optionalTargetValue), 
+		  minValue(minValue), maxValue(maxValue), 
+		  duration(std::max(duration, 0.001f)), 
+		  delayLeft(delay), 
+		  initialDelay(delay), 
+		  iterations(iterations), 
+		  direction(direction), 
+		  easeFunc(std::move(easeFunc)), movingForward(true)
 	{
 		progressValue = (direction == EAnimDirection::Backward) ? maxValue : minValue;
 	};
@@ -67,7 +77,6 @@ public:
     {
         if (animState == EAnimState::STOPPED) return;
         if (dt_seconds <= 0.0f) return;
-        duration = std::max(duration, 0.001f);
         if (delayLeft > 0.0f)
         {
             delayLeft -= dt_seconds;
@@ -155,11 +164,7 @@ public:
 		t = 0.0f;
 		movingForward = true;
 		progressValue = (direction == EAnimDirection::Backward) ? maxValue : minValue;
-		if (direction == EAnimDirection::PingPong)
-		{
-			movingForward = true;
-			progressValue = minValue;
-		}
+		if (direction == EAnimDirection::PingPong) { movingForward = true; progressValue = minValue; }
 		if (optionalTargetValue) *optionalTargetValue = progressValue;
 		animState = EAnimState::RUNNING;
 	}
