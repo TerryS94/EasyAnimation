@@ -8,7 +8,7 @@ A small, lightweight single-header for animating floating point values over time
 int main()
 {
     EasyAnimation& manager = EasyAnimation::Instance();
-                                                //animName //target*//min //max //dur //delay//iterations      //direction //easeFunction
+                                          //animName //target*//min //max //dur //delay//iterations      //direction //easeFunction
     auto anim1 = manager.RegisterAnimation("forward",  nullptr, 0.0f, 1.0f, 1.0f, 0.0f, 1, EAnimDirection::Forward,  EaseFuncs::Linear);
     auto anim2 = manager.RegisterAnimation("backward", nullptr, 0.0f, 1.0f, 1.0f, 0.0f, 1, EAnimDirection::Backward, EaseFuncs::EaseInOutSine);
     auto anim3 = manager.RegisterAnimation("pingpong", nullptr, 0.0f, 1.0f, 1.0f, 0.0f, 1, EAnimDirection::PingPong, EaseFuncs::EaseInOutCubic);
