@@ -237,12 +237,17 @@ public:
 		animations[animName] = std::move(anim);
 		return animations[animName].get();
 	}
-	inline const Animation* GetAnimation(const std::string& animName)
+	inline Animation* GetAnimation(const std::string& animName)
 	{
 		std::lock_guard<std::mutex> lock(animationMutex);
 		auto it = animations.find(animName);
 		if (it == animations.end()) return nullptr;
 		return it->second.get();
+	}
+	inline float GetValueForAnimation(const std::string& animName)
+	{
+		if (Animation* anim = GetAnimation(animName)) return anim->GetValue();
+		return 0.0f;
 	}
 	inline void Shutdown()
 	{
