@@ -51,6 +51,7 @@ private:
 	float duration;
 	EAnimState animState = EAnimState::STOPPED;
 	int iterations;//-1 for inf iterations
+	int initialIterations;
 	EAnimDirection direction;
 	EAnimDirection initialDirection;
 	bool movingForward;//internal for PingPong mode
@@ -66,7 +67,8 @@ public:
 		  duration(std::max(duration, 0.001f)), 
 		  delayLeft(delay), 
 		  initialDelay(delay), 
-		  iterations(iterations), 
+		  iterations(iterations),
+		  initialIterations(iterations),
 		  direction(direction), 
 		  easeFunc(std::move(easeFunc)), movingForward(true)
 	{
@@ -90,6 +92,7 @@ public:
         {
             progressValue = minValue;
             animState = EAnimState::STOPPED;
+			if (optionalTargetValue) *optionalTargetValue = progressValue;
             return;
         }
         float remainingTime = dt_seconds;
@@ -157,8 +160,9 @@ public:
     }
 	inline float GetValue() const { return progressValue; }
 	//start/restart the animation in the desired direction that was passed in
-	inline void Restart()
+	inline void Play()
 	{
+		iterations = initialIterations;
 		direction = initialDirection;
 		delayLeft = initialDelay;
 		t = 0.0f;
@@ -168,10 +172,11 @@ public:
 		if (optionalTargetValue) *optionalTargetValue = progressValue;
 		animState = EAnimState::RUNNING;
 	}
-	//RestartReverse() does NOT permanently change the configured direction.
-    //it computes a temporary "start reversed" state using initialDirection.
-	inline void RestartReverse()
+	//PlayReverse() does NOT permanently change the configured direction.
+    //it computes a temporary "play reversed" state using initialDirection.
+	inline void PlayReverse()
 	{
+		iterations = initialIterations;
 		direction = initialDirection;
 		delayLeft = initialDelay;
 		t = 0.0f;
@@ -194,16 +199,22 @@ public:
 		if (optionalTargetValue) *optionalTargetValue = progressValue;
 		animState = EAnimState::RUNNING;
 	}
+	//stop and reset to the beginning
 	inline void Stop()
 	{
+		animState = EAnimState::STOPPED;
+		delayLeft = 0.0f;
+		t = 0.0f;
+		direction = initialDirection;
+		iterations = initialIterations;
+		movingForward = true;
 		switch (direction)
 		{
-			case EAnimDirection::Forward:  progressValue = maxValue; break;
-			case EAnimDirection::Backward: progressValue = minValue; break;
-			case EAnimDirection::PingPong: progressValue = minValue; movingForward = true; break;
+			case EAnimDirection::Forward:  progressValue = minValue; break;
+			case EAnimDirection::Backward: progressValue = maxValue; break;
+			case EAnimDirection::PingPong: progressValue = minValue; break;
 		}
 		if (optionalTargetValue) *optionalTargetValue = progressValue;
-		animState = EAnimState::STOPPED;
 	}
 	inline EAnimState GetState() const { return animState; }
 	inline bool IsAnimationInfinite() const { return iterations == -1; }
@@ -213,8 +224,7 @@ class EasyAnimation
 {
 private:
 	std::mutex animationMutex;
-	std::unordered_map<std::string, std::unique_ptr<Animation>> animations;
-	std::thread::id UpdateAll_ThreadID{};
+	std::unordered_map<std::string, std::shared_ptr<Animation>> animations;
 public:
 	EasyAnimation() = default;
 	~EasyAnimation() = default;
@@ -229,62 +239,36 @@ public:
 		return instance;
 	}
 	//creates/recreates your animation and returns a pointer to it for convenience
-	inline Animation* RegisterAnimation(const std::string& animName, float* targetValue = nullptr, float minValue = 0.0f, float maxValue = 1.0f, float duration = 1.0f, float delay = 0.0f, int iterations = 1, EAnimDirection direction = EAnimDirection::Forward, std::function<float(float progress)> easeFunc = EaseFuncs::Linear)
+	inline std::shared_ptr<Animation> RegisterAnimation(const std::string& animName, float* targetValue = nullptr, float minValue = 0.0f, float maxValue = 1.0f, float duration = 1.0f, float delay = 0.0f, int iterations = 1, EAnimDirection direction = EAnimDirection::Forward, std::function<float(float progress)> easeFunc = EaseFuncs::Linear)
 	{
-		std::lock_guard<std::mutex> lock(animationMutex);
 		if (!easeFunc) easeFunc = EaseFuncs::Linear;
-		auto anim = std::make_unique<Animation>(targetValue, minValue, maxValue, duration, delay, iterations, direction, std::move(easeFunc));
-		animations[animName] = std::move(anim);
-		return animations[animName].get();
+		auto anim = std::make_shared<Animation>(targetValue, minValue, maxValue, duration, delay, iterations, direction, std::move(easeFunc));
+		std::lock_guard<std::mutex> lock(animationMutex);
+		animations.insert_or_assign(animName, anim);
+		return anim;
 	}
-	inline Animation* GetAnimation(const std::string& animName)
+	inline std::shared_ptr<Animation> GetAnimation(const std::string& animName)
 	{
 		std::lock_guard<std::mutex> lock(animationMutex);
 		auto it = animations.find(animName);
-		if (it == animations.end()) return nullptr;
-		return it->second.get();
+		return (it == animations.end()) ? nullptr : it->second;
 	}
 	inline float GetValueForAnimation(const std::string& animName)
 	{
-		if (Animation* anim = GetAnimation(animName)) return anim->GetValue();
-		return 0.0f;
+		auto anim = GetAnimation(animName);
+		return anim ? anim->GetValue() : 0.0f;
 	}
 	inline void Shutdown()
 	{
 		std::lock_guard<std::mutex> lock(animationMutex);
-		for (const auto& [_, anim] : animations) anim.get()->Stop();
+		for (const auto& [_, anim] : animations) anim->Stop();
 		animations.clear();
-	}
-	//if the animation iterations is not inf and the current thread id is different than the thread id that UpdateAll is called on, then sleep until the animation is over.
-	//A scenario this would be useful for is if you unloaded a dll but wanted to wait for an anim to finish on the render thread before your ejection code runs in your main thread.
-	inline void WaitForAnimationFinish(const std::string& animName)
-	{
-		const Animation* anim = GetAnimation(animName);
-		if (!anim)
-		{
-			MessageBox(nullptr, std::format("[EasyAnimation] WaitForAnimationFinish was called for \"{}\" but it doesn't exist! Bailing out...", animName).c_str(), "Oops...", MB_OK);
-			return;
-		}
-		const bool isDifferentThread = UpdateAll_ThreadID != std::this_thread::get_id();
-		if (!isDifferentThread)
-		{
-			MessageBox(nullptr, std::format("[EasyAnimation] WaitForAnimationFinish was called for \"{}\" but it was called on the same thread as Update function! Bailing out...", animName).c_str(), "Oops...", MB_OK);
-			return;
-		}
-		if (anim->IsAnimationInfinite())
-		{
-			MessageBox(nullptr, std::format("[EasyAnimation] WaitForAnimationFinish was called for \"{}\" but it's an inf animation! Bailing out...", animName).c_str(), "Oops...", MB_OK);
-			return;
-		}
-		while (anim->IsRunning())
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 	//call per frame.
 	//for example, if using ImGui, call this before ImGui_ImplX_NewFrame() and pass ImGui::GetIO.DeltaTime into the parameter
 	inline void UpdateAll(float dt_seconds)
 	{
-		UpdateAll_ThreadID = std::this_thread::get_id();
 		std::lock_guard<std::mutex> lock(animationMutex);
-		for (const auto& [_, anim] : animations) anim.get()->Update(dt_seconds);
+		for (const auto& [_, anim] : animations) anim->Update(dt_seconds);
 	}
 };
