@@ -232,7 +232,6 @@ public:
 	inline Animation* RegisterAnimation(const std::string& animName, float* targetValue = nullptr, float minValue = 0.0f, float maxValue = 1.0f, float duration = 1.0f, float delay = 0.0f, int iterations = 1, EAnimDirection direction = EAnimDirection::Forward, std::function<float(float progress)> easeFunc = EaseFuncs::Linear)
 	{
 		std::lock_guard<std::mutex> lock(animationMutex);
-		duration = std::max(duration, 0.001f);
 		if (!easeFunc) easeFunc = EaseFuncs::Linear;
 		auto anim = std::make_unique<Animation>(targetValue, minValue, maxValue, duration, delay, iterations, direction, std::move(easeFunc));
 		animations[animName] = std::move(anim);
