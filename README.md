@@ -8,10 +8,10 @@ A small, lightweight single-header for animating floating point values over time
 int main()
 {
     EasyAnimation& manager = EasyAnimation::Instance();
-                                          //animName //target*//min //max //dur //delay//iterations      //direction //easeFunction
+                                          //animName //target*//from //to //dur //delay//iterations      //direction //easeFunction
     auto anim1 = manager.RegisterAnimation("forward",  nullptr, 0.0f, 1.0f, 1.0f, 0.0f, 1, EAnimDirection::Forward,  EaseFuncs::Linear);
-    auto anim2 = manager.RegisterAnimation("backward", nullptr, 0.0f, 1.0f, 1.0f, 0.0f, 1, EAnimDirection::Backward, EaseFuncs::EaseInOutSine);
-    auto anim3 = manager.RegisterAnimation("pingpong", nullptr, 0.0f, 1.0f, 1.0f, 0.0f, 1, EAnimDirection::PingPong, EaseFuncs::EaseInOutCubic);
+    auto anim2 = manager.RegisterAnimation("backward", nullptr, 0.0f, 1.0f, 1.0f, 0.0f, 1, EAnimDirection::Backward, EaseFuncs::Linear);
+    auto anim3 = manager.RegisterAnimation("pingpong", nullptr, 0.0f, 1.0f, 1.0f, 0.0f, 1, EAnimDirection::PingPong, EaseFuncs::Linear);
     anim1->Play();
     anim2->Play();
     anim3->Play();
@@ -37,15 +37,15 @@ int main()
 ## output of the code above
 ```
 Running animations...
-Step 0 | Forward: 0.1 | Backward: 0.975528  | PingPong: 0.032
-Step 1 | Forward: 0.2 | Backward: 0.904508  | PingPong: 0.256
-Step 2 | Forward: 0.3 | Backward: 0.793893  | PingPong: 0.744
-Step 3 | Forward: 0.4 | Backward: 0.654508  | PingPong: 0.968
-Step 4 | Forward: 0.5 | Backward: 0.5       | PingPong: 1
-Step 5 | Forward: 0.6 | Backward: 0.345491  | PingPong: 0.968
-Step 6 | Forward: 0.7 | Backward: 0.206107  | PingPong: 0.744
-Step 7 | Forward: 0.8 | Backward: 0.0954914 | PingPong: 0.256
-Step 8 | Forward: 0.9 | Backward: 0.0244716 | PingPong: 0.032
-Step 9 | Forward: 1   | Backward: 0         | PingPong: 0
+Step 0 | Forward: 0.1 | Backward: 0.9 | PingPong: 0.2
+Step 1 | Forward: 0.2 | Backward: 0.8 | PingPong: 0.4
+Step 2 | Forward: 0.3 | Backward: 0.7 | PingPong: 0.6
+Step 3 | Forward: 0.4 | Backward: 0.6 | PingPong: 0.8
+Step 4 | Forward: 0.5 | Backward: 0.5 | PingPong: 1.0
+Step 5 | Forward: 0.6 | Backward: 0.4 | PingPong: 0.8
+Step 6 | Forward: 0.7 | Backward: 0.3 | PingPong: 0.6
+Step 7 | Forward: 0.8 | Backward: 0.2 | PingPong: 0.4
+Step 8 | Forward: 0.9 | Backward: 0.1 | PingPong: 0.2
+Step 9 | Forward: 1.0 | Backward: 0.0 | PingPong: 0.0
 Animations finished.
 ```
