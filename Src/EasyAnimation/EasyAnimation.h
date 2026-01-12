@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <cmath>
 
-//https://easings.net/
 namespace EaseFuncs
 {
 	static constexpr float PI = 3.14159265358979323846f;
@@ -28,21 +27,24 @@ namespace EaseFuncs
 	inline float EaseInExpo(float p) { return p == 0.0f ? 0.0f : powf(2.0f, 10.0f * p - 10.0f); }
 	inline float EaseOutExpo(float p) { return p == 1.0f ? 1.0f : 1.0f - powf(2.0f, -10.0f * p); }
 }
+
 enum class EAnimState : uint8_t
 {
 	STOPPED,
 	RUNNING,
 };
+
 enum class EAnimDirection : uint8_t
 {
-	Forward,  //1 iteration = min -> max
-	Backward, //1 iteration = max -> min
-	PingPong  //1 iteration = min -> max -> min
+	Forward,
+	Backward,
+	PingPong
 };
+
 class Animation
 {
 private:
-	float t = 0.0f;//normalized time progress for the current phase
+	float t = 0.0f;
 	float initialDelay;
 	float delayLeft;
 	float minValue;
@@ -50,116 +52,134 @@ private:
 	float progressValue;
 	float duration;
 	EAnimState animState = EAnimState::STOPPED;
-	int iterations;//-1 for inf iterations
+	int iterations;
 	int initialIterations;
 	EAnimDirection direction;
 	EAnimDirection initialDirection;
-	bool movingForward;//internal for PingPong mode
+	bool movingForward;
+	bool isPingPongReverse = false;
 	std::function<float(float progress)> easeFunc {};
 	float* optionalTargetValue = nullptr;
-public:
 
 public:
 	inline Animation(float* optionalTargetValue, float minValue, float maxValue, float duration, float delay, int iterations, EAnimDirection direction, std::function<float(float)> easeFunc)
 		: initialDirection(direction),
-		  optionalTargetValue(optionalTargetValue), 
-		  minValue(minValue), maxValue(maxValue), 
-		  duration(std::max(duration, 0.001f)), 
-		  delayLeft(delay), 
-		  initialDelay(delay), 
-		  iterations(iterations),
-		  initialIterations(iterations),
-		  direction(direction), 
-		  easeFunc(std::move(easeFunc)), movingForward(true)
+		optionalTargetValue(optionalTargetValue),
+		minValue(minValue), maxValue(maxValue),
+		duration(std::max(duration, 0.001f)),
+		delayLeft(delay),
+		initialDelay(delay),
+		iterations(iterations),
+		initialIterations(iterations),
+		direction(direction),
+		easeFunc(std::move(easeFunc)), movingForward(true)
 	{
 		progressValue = (direction == EAnimDirection::Backward) ? maxValue : minValue;
 	};
-	inline ~Animation() {};
-    inline void Update(float dt_seconds)
-    {
-        if (animState == EAnimState::STOPPED) return;
-        if (dt_seconds <= 0.0f) return;
-        if (delayLeft > 0.0f)
-        {
-            delayLeft -= dt_seconds;
-            if (delayLeft > 0.0f) return;
-			dt_seconds = -delayLeft;
-            delayLeft = 0.0f;
-            if (dt_seconds <= 0.0f) return;
-        }
-        const float range = maxValue - minValue;
-        if (range == 0.0f)
-        {
-            progressValue = minValue;
-            animState = EAnimState::STOPPED;
-			if (optionalTargetValue) *optionalTargetValue = progressValue;
-            return;
-        }
-        float remainingTime = dt_seconds;
-        while (remainingTime > 0.0f && animState == EAnimState::RUNNING)
-        {
-            const float dtToNorm = remainingTime / duration;
-            const float normLeft = 1.0f - t;
-            if (dtToNorm < normLeft)
-            {
-                t += dtToNorm;
-                remainingTime = 0.0f;
-            }
-            else
-            {
-                t = 1.0f;
-				const float timeToFinishPhase = normLeft * duration;
-                remainingTime -= timeToFinishPhase;
-            }
-            const float eased = easeFunc ? easeFunc(t) : t;
-            if (direction == EAnimDirection::Forward) progressValue = minValue + range * eased;
-            else if (direction == EAnimDirection::Backward) progressValue = maxValue - range * eased;
-            else progressValue = movingForward ? (minValue + range * eased) : (maxValue - range * eased);
 
-            if (t < 1.0f) break;
-            if (direction == EAnimDirection::PingPong)
-            {
-                if (movingForward)
-                {
-                    movingForward = false;
-                    t = 0.0f;
-                }
-                else
-                {
-                    movingForward = true;
-                    t = 0.0f;
-                    if (iterations != -1)
-                    {
-                        --iterations;
-                        if (iterations <= 0)
-                        {
-                            animState = EAnimState::STOPPED;
-                            progressValue = minValue;
-                            break;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                t = 0.0f;
-                if (iterations != -1)
-                {
-                    --iterations;
-                    if (iterations <= 0)
-                    {
-                        animState = EAnimState::STOPPED;
-                        if (direction == EAnimDirection::Forward)  progressValue = maxValue;
-                        if (direction == EAnimDirection::Backward) progressValue = minValue;
-                        break;
-                    }
-                }
-            }
-        }
+	inline ~Animation() {};
+
+	inline void Update(float dt_seconds)
+	{
+		if (animState == EAnimState::STOPPED) return;
+		if (dt_seconds <= 0.0f) return;
+
+		if (delayLeft > 0.0f)
+		{
+			delayLeft -= dt_seconds;
+			if (delayLeft > 0.0f) return;
+			dt_seconds = -delayLeft;
+			delayLeft = 0.0f;
+			if (dt_seconds <= 0.0f) return;
+		}
+
+		const float range = maxValue - minValue;
+		if (range == 0.0f)
+		{
+			progressValue = minValue;
+			animState = EAnimState::STOPPED;
+			if (optionalTargetValue) *optionalTargetValue = progressValue;
+			return;
+		}
+
+		float currentDuration = duration;
+		if (direction == EAnimDirection::PingPong) currentDuration *= 0.5f;
+
+		float remainingTime = dt_seconds;
+		while (remainingTime > 0.0f && animState == EAnimState::RUNNING)
+		{
+			const float dtToNorm = remainingTime / currentDuration;
+			const float normLeft = 1.0f - t;
+
+			if (dtToNorm < normLeft)
+			{
+				t += dtToNorm;
+				remainingTime = 0.0f;
+			}
+			else
+			{
+				t = 1.0f;
+				const float timeToFinishPhase = normLeft * currentDuration;
+				remainingTime -= timeToFinishPhase;
+				if (remainingTime < 0.0001f) remainingTime = 0.0f;
+			}
+
+			const float eased = easeFunc ? easeFunc(t) : t;
+
+			if (direction == EAnimDirection::Forward) progressValue = minValue + range * eased;
+			else if (direction == EAnimDirection::Backward) progressValue = maxValue - range * eased;
+			else progressValue = movingForward ? (minValue + range * eased) : (maxValue - range * eased);
+
+			if (t < 1.0f) break;
+
+			if (direction == EAnimDirection::PingPong)
+			{
+				bool cycleFinished = false;
+				if (movingForward)
+				{
+					movingForward = false;
+					t = 0.0f;
+					if (isPingPongReverse) cycleFinished = true;
+				}
+				else
+				{
+					movingForward = true;
+					t = 0.0f;
+					if (!isPingPongReverse) cycleFinished = true;
+				}
+
+				if (cycleFinished && iterations != -1)
+				{
+					--iterations;
+					if (iterations <= 0)
+					{
+						animState = EAnimState::STOPPED;
+						progressValue = isPingPongReverse ? maxValue : minValue;
+						break;
+					}
+				}
+			}
+			else
+			{
+				t = 0.0f;
+				if (iterations != -1)
+				{
+					--iterations;
+					if (iterations <= 0)
+					{
+						animState = EAnimState::STOPPED;
+						if (direction == EAnimDirection::Forward)  progressValue = maxValue;
+						if (direction == EAnimDirection::Backward) progressValue = minValue;
+						break;
+					}
+				}
+			}
+		}
 		if (optionalTargetValue) *optionalTargetValue = progressValue;
-    }
+	}
+
 	inline float GetValue() const { return progressValue; }
-	//start/restart the animation in the desired direction that was passed in
+
 	inline void Play()
 	{
 		iterations = initialIterations;
@@ -167,19 +187,20 @@ public:
 		delayLeft = initialDelay;
 		t = 0.0f;
 		movingForward = true;
+		isPingPongReverse = false;
 		progressValue = (direction == EAnimDirection::Backward) ? maxValue : minValue;
 		if (direction == EAnimDirection::PingPong) { movingForward = true; progressValue = minValue; }
 		if (optionalTargetValue) *optionalTargetValue = progressValue;
 		animState = EAnimState::RUNNING;
 	}
-	//PlayReverse() does NOT permanently change the configured direction.
-    //it computes a temporary "play reversed" state using initialDirection.
+
 	inline void PlayReverse()
 	{
 		iterations = initialIterations;
 		direction = initialDirection;
 		delayLeft = initialDelay;
 		t = 0.0f;
+
 		if (direction == EAnimDirection::Forward)
 		{
 			direction = EAnimDirection::Backward;
@@ -190,16 +211,17 @@ public:
 			direction = EAnimDirection::Forward;
 			progressValue = minValue;
 		}
-		else//PingPong
+		else
 		{
 			movingForward = false;
 			progressValue = maxValue;
+			isPingPongReverse = true;
 		}
 
 		if (optionalTargetValue) *optionalTargetValue = progressValue;
 		animState = EAnimState::RUNNING;
 	}
-	//stop and reset to the beginning
+
 	inline void Stop()
 	{
 		animState = EAnimState::STOPPED;
@@ -208,6 +230,7 @@ public:
 		direction = initialDirection;
 		iterations = initialIterations;
 		movingForward = true;
+		isPingPongReverse = false;
 		switch (direction)
 		{
 			case EAnimDirection::Forward:  progressValue = minValue; break;
@@ -216,15 +239,18 @@ public:
 		}
 		if (optionalTargetValue) *optionalTargetValue = progressValue;
 	}
+
 	inline EAnimState GetState() const { return animState; }
 	inline bool IsAnimationInfinite() const { return iterations == -1; }
 	inline bool IsRunning() const { return animState == EAnimState::RUNNING; }
 };
+
 class EasyAnimation
 {
 private:
 	std::mutex animationMutex;
 	std::unordered_map<std::string, std::shared_ptr<Animation>> animations;
+
 public:
 	EasyAnimation() = default;
 	~EasyAnimation() = default;
@@ -238,7 +264,7 @@ public:
 		static EasyAnimation instance;
 		return instance;
 	}
-	//creates/recreates your animation and returns a pointer to it for convenience
+
 	inline std::shared_ptr<Animation> RegisterAnimation(const std::string& animName, float* targetValue = nullptr, float minValue = 0.0f, float maxValue = 1.0f, float duration = 1.0f, float delay = 0.0f, int iterations = 1, EAnimDirection direction = EAnimDirection::Forward, std::function<float(float progress)> easeFunc = EaseFuncs::Linear)
 	{
 		if (!easeFunc) easeFunc = EaseFuncs::Linear;
@@ -247,23 +273,27 @@ public:
 		animations.insert_or_assign(animName, anim);
 		return anim;
 	}
+
 	inline std::shared_ptr<Animation> GetAnimation(const std::string& animName)
 	{
 		std::lock_guard<std::mutex> lock(animationMutex);
 		auto it = animations.find(animName);
 		return (it == animations.end()) ? nullptr : it->second;
 	}
+
 	inline float GetValueForAnimation(const std::string& animName)
 	{
 		auto anim = GetAnimation(animName);
 		return anim ? anim->GetValue() : 0.0f;
 	}
+
 	inline void Shutdown()
 	{
 		std::lock_guard<std::mutex> lock(animationMutex);
 		for (const auto& [_, anim] : animations) anim->Stop();
 		animations.clear();
 	}
+
 	//call per frame.
 	//for example, if using ImGui, call this before ImGui_ImplX_NewFrame() and pass ImGui::GetIO.DeltaTime into the parameter
 	inline void UpdateAll(float dt_seconds)
