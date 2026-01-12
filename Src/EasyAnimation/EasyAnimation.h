@@ -295,7 +295,7 @@ public:
 	}
 
 	//call per frame.
-	//for example, if using ImGui, call this before ImGui_ImplX_NewFrame() and pass ImGui::GetIO.DeltaTime into the parameter
+    //for example, if using ImGui, call this before ImGui_ImplX_NewFrame() and pass ImGui::GetIO.DeltaTime into the parameter
 	inline void UpdateAll(float dt_seconds)
 	{
 		std::lock_guard<std::mutex> lock(animationMutex);
